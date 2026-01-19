@@ -1,14 +1,60 @@
 import json
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Self
 import httpx
 
-from ollama_response import OllamaResponse
+from ollama_response import Message, OllamaChatResponse, OllamaResponse, UserMessage
 
 
 class OllamaApiClient:
     def __init__(self, address: str, model: str) -> None:
         self.endpoint = f"http://{address}"
         self.model = model
+
+    def __enter__(self) -> Self:
+        self.load_model_into_computers_memory()
+        print("LOADING MODEL INTO MEMORY")
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> Self:
+        if exc_val:
+            raise exc_val
+
+        self.unload_model_from_memory()
+        print("UNLOADED MODEL FROM MEMORY")
+        return self
+
+    def load_model_into_computers_memory(self) -> None:
+        response = httpx.post(
+            f"{self.endpoint}/api/generate",
+            json={"model": self.model},
+        )
+        assert response.json()["done"] == True, "Could not load the model"
+
+    def unload_model_from_memory(self) -> None:
+        response = httpx.post(
+            f"{self.endpoint}/api/generate",
+            json={"model": self.model, "keep_alive": 0},
+        )
+
+        assert response.json()["done"] == True, "Model couldn't be offloaded"
+
+    async def complete_chat(
+        self,
+        messages: list[dict],
+    ) -> AsyncGenerator[OllamaChatResponse]:
+        async with httpx.AsyncClient() as http:
+            payload = {"model": self.model, "messages": messages}
+
+            async with http.stream(
+                "POST",
+                f"{self.endpoint}/api/chat",
+                json=payload,
+            ) as stream:
+                if stream.status_code != httpx.codes.OK:
+                    raise Exception("error: " + str(stream.status_code))
+
+                async for line in stream.aiter_lines():
+                    yield OllamaChatResponse(**json.loads(line))
 
     async def generate_response(
         self,
@@ -20,6 +66,9 @@ class OllamaApiClient:
                 "model": self.model,
                 "prompt": request,
                 "context": context,
+                "options": {
+                    "seed": None,  # Used for deterministic answers
+                },
             }
 
             async with http.stream(
