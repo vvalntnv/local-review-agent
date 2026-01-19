@@ -1,11 +1,12 @@
 import json
-from typing import AsyncGenerator, Self
+from typing import AsyncGenerator, Self, List, Optional
 import httpx
 
-from ollama_response import Message, OllamaChatResponse, OllamaResponse, UserMessage
+from ai.ollama_response import Message, OllamaChatResponse, OllamaResponse
+from ai.base_model import BaseAIModel
 
 
-class OllamaApiClient:
+class OllamaApiClient(BaseAIModel):
     def __init__(self, address: str, model: str) -> None:
         self.endpoint = f"http://{address}"
         self.model = model
@@ -38,10 +39,10 @@ class OllamaApiClient:
 
         assert response.json()["done"] == True, "Model couldn't be offloaded"
 
-    async def complete_chat(
+    async def chat(
         self,
         messages: list[dict],
-    ) -> AsyncGenerator[OllamaChatResponse]:
+    ) -> AsyncGenerator[OllamaChatResponse, None]:
         async with httpx.AsyncClient() as http:
             payload = {"model": self.model, "messages": messages}
 
@@ -54,17 +55,18 @@ class OllamaApiClient:
                     raise Exception("error: " + str(stream.status_code))
 
                 async for line in stream.aiter_lines():
-                    yield OllamaChatResponse(**json.loads(line))
+                    if line.strip():
+                        yield OllamaChatResponse(**json.loads(line))
 
-    async def generate_response(
+    async def generate(
         self,
-        request: str,
-        context: list[int] | None = None,
-    ) -> AsyncGenerator[OllamaResponse, OllamaResponse]:
+        prompt: str,
+        context: Optional[List[int]] = None,
+    ) -> AsyncGenerator[OllamaResponse, None]:
         async with httpx.AsyncClient(timeout=60) as http:
             payload = {
                 "model": self.model,
-                "prompt": request,
+                "prompt": prompt,
                 "context": context,
                 "options": {
                     "seed": None,  # Used for deterministic answers
@@ -79,5 +81,4 @@ class OllamaApiClient:
                 async for line in stream.aiter_lines():
                     if line.strip():
                         response = OllamaResponse(**json.loads(line))
-
                         yield response

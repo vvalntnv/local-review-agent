@@ -1,6 +1,6 @@
 import asyncio
-from ollama_api_client import OllamaApiClient
-from ollama_response import Message, OllamaChatResponse, UserMessage
+from ai.communication import OllamaApiClient
+from ai.ollama_response import Message, UserMessage
 
 
 async def main() -> None:
@@ -12,7 +12,7 @@ async def main() -> None:
             if user_request == "exit":
                 break
 
-            async for response in api_client.generate_response(user_request, context):
+            async for response in api_client.generate(user_request, context):
                 print(response.response, sep="", end="")
                 if response.done:
                     context = response.context
@@ -33,7 +33,7 @@ async def main_with_tools() -> None:
             assistant_message = None
             current_content = ""
             tools = []
-            async for response in api_client.complete_chat(messages):
+            async for response in api_client.chat(messages):
                 print(response.message.content, sep="", end="")
                 current_content += response.message.content
 
