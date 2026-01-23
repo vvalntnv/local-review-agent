@@ -42,6 +42,7 @@ class OllamaApiClient(BaseAIModel):
     async def chat(
         self,
         messages: list[dict],
+        tools: Optional[list[dict]] = None,
     ) -> AsyncGenerator[OllamaChatResponse, None]:
         async with httpx.AsyncClient() as http:
             payload = {"model": self.model, "messages": messages}

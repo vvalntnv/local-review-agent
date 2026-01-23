@@ -1,10 +1,16 @@
 from abc import ABC, abstractmethod
 from typing import AsyncGenerator, Any, Awaitable, List, Optional, Dict
 
+from .ollama_response import OllamaChatResponse
+
 
 class BaseAIModel(ABC):
     @abstractmethod
-    def chat(self, messages: List[Dict[str, str]]) -> AsyncGenerator[Any, None]:
+    def chat(
+        self,
+        messages: List[Dict[str, str]],
+        tools: Optional[List[Dict[str, str]]],
+    ) -> AsyncGenerator[OllamaChatResponse, None]:
         pass
 
     @abstractmethod
