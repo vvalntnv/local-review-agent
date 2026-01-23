@@ -3,7 +3,6 @@ import re
 from typing import Any, Callable, Dict, List, Optional, Union, get_type_hints
 from pydantic import BaseModel, Field
 from tools import TOOLS
-from tools.schemas import File, Directory
 
 
 class ToolFunction(BaseModel):
@@ -45,20 +44,20 @@ class ToolCall(BaseModel):
 
 def _python_type_to_json_schema(python_type: type) -> Dict[str, Any]:
     """Convert Python type to JSON schema definition"""
-    if python_type == str:
+    if python_type is str:
         return {"type": "string"}
-    elif python_type == int:
+    elif python_type is int:
         return {"type": "integer"}
-    elif python_type == float:
+    elif python_type is float:
         return {"type": "number"}
-    elif python_type == bool:
+    elif python_type is bool:
         return {"type": "boolean"}
-    elif python_type == type(None):
+    elif python_type is type(None):
         return {"type": "null"}
     elif hasattr(python_type, "__origin__"):
         # Handle typing constructs like List, Union, etc.
         origin = python_type.__origin__
-        if origin == list:
+        if origin is list:
             item_type = python_type.__args__[0] if python_type.__args__ else str
             return {"type": "array", "items": _python_type_to_json_schema(item_type)}
         elif origin == Union:
@@ -66,11 +65,11 @@ def _python_type_to_json_schema(python_type: type) -> Dict[str, Any]:
             args = python_type.__args__
             if len(args) == 2 and type(None) in args:
                 # Optional[T] case
-                non_none_type = args[0] if args[1] == type(None) else args[1]
+                non_none_type = args[0] if args[1] is type(None) else args[1]
                 return _python_type_to_json_schema(non_none_type)
             else:
                 # Complex Union - use first non-None type
-                non_none_types = [arg for arg in args if arg != type(None)]
+                non_none_types = [arg for arg in args if arg is not type(None)]
                 if non_none_types:
                     return _python_type_to_json_schema(non_none_types[0])
     elif inspect.isclass(python_type) and issubclass(python_type, BaseModel):

@@ -1,12 +1,14 @@
-import inspect
 import asyncio
+import logging
 from ai.agents.code_review import CodeReviewAgent
 from ai.message import Message
-from ai.tool_definitions import Tool, ToolFunction, generate_ollama_tools
+from ai.tool_definitions import generate_ollama_tools
 from db.database import DatabaseManager
 from db.models import Chat
 from ai.communication import OllamaApiClient
-from tools import TOOLS
+
+log = logging.getLogger("main")
+log.setLevel(logging.DEBUG)
 
 
 async def main() -> None:
@@ -25,7 +27,6 @@ async def main() -> None:
     # Example AI usage
     with OllamaApiClient("localhost:11434", "llama3.2") as client:
         tools = generate_ollama_tools()
-        breakpoint()
         review_agent = CodeReviewAgent(
             client,
             "You are a pro at doing review",
@@ -33,6 +34,8 @@ async def main() -> None:
         )
 
         messages: list[Message] = []
+        total_loops = 0
+        ask_user = False
         while True:
             user_request = input("\nWhat should the agent review?")
             messages.append(
@@ -43,7 +46,17 @@ async def main() -> None:
                     "tool_calls": None,
                 }
             )
-            messages = await review_agent.invoke(messages)
+
+            ask_user = False
+
+            while not ask_user:
+                if total_loops > 10:
+                    raise Exception(
+                        "qvno bratleto e tupo, moje bi shte e"
+                        "po-dobre da si go svurshihs sam bratle ;P"
+                    )
+                messages, ask_user = await review_agent.invoke(messages)
+                log.debug(messages)
 
 
 if __name__ == "__main__":

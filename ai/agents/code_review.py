@@ -1,4 +1,6 @@
 import json
+from typing import Callable
+
 from pydantic import BaseModel
 from ai.agents.base_agent import BaseAgent
 from ai.base_model import BaseAIModel
@@ -7,9 +9,46 @@ from ai.tool_definitions import Tool, ToolCall
 from tools import TOOLS
 
 CODING_AGENT_INSTRUCTIONS = """
-    YOU ARE A PROFOUND DEVELOPER, looking at code and trying to search
-    for bad practices and suggesting a new clean-code version
-    """
+You are a Python code reviewer. Your job is to inspect a repository and report bad practices, bugs, and refactors, and suggest cleaner implementations.
+
+Hard rules:
+1) Never read or reveal secrets. Never open or print the contents of any .env file.
+2) Always ignore the following paths/names when scanning:
+   - .git
+   - __pycache__
+   - any file named .env
+3) When calling explore_structure, ALWAYS pass ignore_names as a JSON array of regex strings (type: array of strings). Never pass ignore_names as a single string.
+4) Tool-call arguments MUST be valid JSON and MUST match the tool schema types exactly (integers as numbers, arrays as JSON arrays, etc).
+
+For explore_structure, use:
+{
+  "root_dir_path": ".",
+  "depth": 5,
+  "ignore_names": ["^\\.git$", "^__pycache__$", "^\\.env$", "^\\.env\\..*$"]
+}
+
+Notes:
+- Ignore patterns must be valid regex.
+- If you are unsure what to do next, explore the structure first.
+
+Some info about the tools
+explore_structure:
+When you receive the output of explore_structure:
+- Treat it as the project file tree.
+- Do not ask the user what to do with it.
+"""
+
+_ = """When you receive the output of explore_structure:
+- Treat it as the project file tree.
+- Immediately analyze the structure for:
+  - suspicious files
+  - bad practices
+  - missing standard files
+  - poor naming
+  - likely tech stack
+- Then decide which files to read next.
+- Do not ask the user what to do with it.
+"""
 
 
 class CodeReviewAgent(BaseAgent):
@@ -25,6 +64,8 @@ class CodeReviewAgent(BaseAgent):
 
     async def invoke(self, messages: list[Message]):
         # I know its dirty, its just a prototype
+        should_give_back_control = True
+
         if len(messages) <= 1:
             messages.insert(
                 0,
@@ -61,34 +102,71 @@ class CodeReviewAgent(BaseAgent):
             if chunk.message.tool_calls:
                 tools.extend([ToolCall(**tool) for tool in chunk.message.tool_calls])
 
-        breakpoint()
         if tools:
-            for tool_call in tools:
-                if tool_call.type == "function":
-                    tool_to_call = TOOLS[tool_call.function.name]
-                    result = tool_to_call(tool_call.function.arguments)
+            should_give_back_control = False
+            result, is_success = await self.call_tool(tools)
+            message_predicate = (
+                "The tool failed... I should try and call the tool again, "
+                "this time with keeping the error in mind. "
+                "Maybe the error will tell me if I have something wrong "
+                "in the parameters passed: "
+                if not is_success
+                else ""
+            )
 
-                    if isinstance(result, BaseModel):
-                        result = json.dumps(result.model_dump())
-                    elif not isinstance(result, (str, int, float)):
-                        raise Exception("type not ok bro")
-
-                    messages.append(
-                        {
-                            "role": "tool",
-                            "content": str(result),
-                            "images": None,
-                            "tool_calls": [tool_call.model_dump()],
-                        }
-                    )
-        else:
-            last_message: Message = {
-                "role": "agent",
-                "content": current_content,
-                "tool_calls": None,
+            tool_result: Message = {
+                "role": "tool",
+                "content": result,
                 "images": None,
+                "tool_calls": None,
             }
+            messages.append(tool_result)
 
-            messages.append(last_message)
+            if not is_success:
+                model_message: Message = {
+                    "role": "assistant",
+                    "content": message_predicate + result,
+                    "images": None,
+                    "tool_calls": None,
+                }
+                messages.append(model_message)
 
-        return messages
+        return messages, should_give_back_control
+
+    async def call_tool(self, tools_to_call: list[ToolCall]) -> tuple[str, bool]:
+        for tool in tools_to_call:
+            print("calling tool: " + tool.function.name)
+            tool_function = TOOLS.get(tool.function.name)
+
+            if not tool_function:
+                message = "The tool does not exist!"
+                return (message, False)
+
+            result, is_success = self.try_to_call_tool(
+                tool_function,
+                tool.function.arguments,
+            )
+
+            return result, is_success
+
+        return ("Nothing executed", False)
+
+    def try_to_call_tool(self, function: Callable, kwargs: dict) -> tuple[str, bool]:
+        try:
+            result = function(**kwargs)
+
+            if isinstance(result, BaseModel):
+                result = result.model_dump_json()
+            elif isinstance(result, dict):
+                result = json.dumps(result)
+            elif not isinstance(result, str):
+                try:
+                    result = str(result)
+                except Exception:
+                    return ("TOOL RESULT WITH WRONG TYPE", False)
+
+            return (result, True)
+
+        except Exception as e:
+            message = "While calling the tool, we encountered an error: " + str(e)
+            return (message, False)

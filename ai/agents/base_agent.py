@@ -7,5 +7,5 @@ class BaseAgent(ABC):
         pass
 
     @abstractmethod
-    async def invoke(self, messages: list[Message]) -> list[Message]:
+    async def invoke(self, messages: list[Message]) -> tuple[list[Message], bool]:
         pass

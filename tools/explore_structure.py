@@ -8,6 +8,9 @@ def explore_structure(
     depth: int = 1,
     ignore_names: list[str] | None = None,
 ) -> Directory:
+    if depth is None:
+        depth = 1
+
     if not os.path.isdir(root_dir_path):
         raise Exception(f"Path is not a directory: {root_dir_path}")
 

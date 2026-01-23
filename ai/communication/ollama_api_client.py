@@ -29,7 +29,7 @@ class OllamaApiClient(BaseAIModel):
             f"{self.endpoint}/api/generate",
             json={"model": self.model},
         )
-        assert response.json()["done"] == True, "Could not load the model"
+        assert response.json()["done"], "Could not load the model"
 
     def unload_model_from_memory(self) -> None:
         response = httpx.post(
@@ -37,7 +37,7 @@ class OllamaApiClient(BaseAIModel):
             json={"model": self.model, "keep_alive": 0},
         )
 
-        assert response.json()["done"] == True, "Model couldn't be offloaded"
+        assert response.json()["done"], "Model couldn't be offloaded"
 
     async def chat(
         self,
@@ -45,7 +45,10 @@ class OllamaApiClient(BaseAIModel):
         tools: Optional[list[dict]] = None,
     ) -> AsyncGenerator[OllamaChatResponse, None]:
         async with httpx.AsyncClient() as http:
-            payload = {"model": self.model, "messages": messages}
+            payload = {"model": self.model, "temperature": 0.1, "messages": messages}
+
+            if tools:
+                payload["tools"] = tools
 
             async with http.stream(
                 "POST",
