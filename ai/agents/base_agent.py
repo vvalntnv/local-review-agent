@@ -1,8 +1,12 @@
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
 from ai.base_model import BaseAIModel
 from ai.message import AgentMessage
 from ai.tool_definitions import Tool
 from program_state import ProgramState
+
+if TYPE_CHECKING:
+    from tools.todos import ToDoItem
 
 
 class BaseAgent(ABC):
@@ -10,6 +14,7 @@ class BaseAgent(ABC):
         self.model = ai_model
         self.tools = [tool.model_dump() for tool in tools]
         self.messages: list[AgentMessage] = []
+        self.todos: list["ToDoItem"] = []
 
     @abstractmethod
     async def invoke(
