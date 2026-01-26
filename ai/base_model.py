@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import AsyncGenerator, Any, Awaitable, List, Optional, Dict
 
+from pydantic import BaseModel
+
 from .ollama_response import OllamaChatResponse
 
 
@@ -15,7 +17,10 @@ class BaseAIModel(ABC):
 
     @abstractmethod
     def generate(
-        self, prompt: str, context: Optional[List[int]] = None
+        self,
+        prompt: str,
+        context: Optional[List[int]] = None,
+        structure: Optional[type[BaseModel]] = None,
     ) -> AsyncGenerator[Any, None]:
         pass
 

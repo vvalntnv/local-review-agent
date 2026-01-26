@@ -1,8 +1,8 @@
 from pydantic import BaseModel, Field, field_validator
 
 
-class ShouldAskForHumanApproval(BaseModel):
-    should_ask: bool
+class AgentDecision(BaseModel):
+    should_do: bool
     confidence: float = Field(description="A number between 1 and 0")
 
     @field_validator("confidence", mode="before")

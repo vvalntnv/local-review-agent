@@ -3,11 +3,11 @@ import json
 import logging
 from ai.agents.code_review import CodeReviewAgent
 
-# from ai.message import AgentMessage
+from ai.message import AgentMessage
 from ai.tool_definitions import generate_ollama_tools
 from db.database import DatabaseManager
 
-# from db.models import Chat
+from db.models import Chat
 from ai.communication import OllamaApiClient
 
 log = logging.getLogger("main")
@@ -18,25 +18,25 @@ async def main() -> None:
     db_manager = DatabaseManager()
     db_manager.init_models()
 
-    # def get_or_create_chat(session, name: str = "default") -> Chat:
-    #     chat = session.query(Chat).filter_by(name=name).first()
-    #     if not chat:
-    #         chat = Chat(name=name, messages=[])
-    #         session.add(chat)
-    #         session.commit()
-    #     return chat
-    #
-    # def save_messages(session, chat_id: int, messages: list[AgentMessage]) -> None:
-    #     chat = session.get(Chat, chat_id)
-    #     if chat:
-    #         chat.messages = messages
-    #         session.commit()
-    #
-    # # Get or create chat for persistence
-    # with db_manager.get_session() as session:
-    #     chat = get_or_create_chat(session, "code_review_session")
-    #     messages: list[AgentMessage] = chat.messages or []
-    #
+    def get_or_create_chat(session, name: str = "default") -> Chat:
+        chat = session.query(Chat).filter_by(name=name).first()
+        if not chat:
+            chat = Chat(name=name, messages=[])
+            session.add(chat)
+            session.commit()
+        return chat
+
+    def save_messages(session, chat_id: int, messages: list[AgentMessage]) -> None:
+        chat = session.get(Chat, chat_id)
+        if chat:
+            chat.messages = messages
+            session.commit()
+
+    # Get or create chat for persistence
+    with db_manager.get_session() as session:
+        chat = get_or_create_chat(session, "code_review_session")
+        messages: list[AgentMessage] = chat.messages or []
+
     # Example AI usage
     messages = []
     with OllamaApiClient("localhost:11434", "qwen3:8b") as client:
@@ -77,8 +77,8 @@ async def main() -> None:
                 log.debug(messages)
 
                 # Save conversation after each agent interaction
-                # with db_manager.get_session() as session:
-                #     save_messages(session, chat.id, messages)
+                with db_manager.get_session() as session:
+                    save_messages(session, chat.id, messages)
 
 
 if __name__ == "__main__":

@@ -1,8 +1,9 @@
 import json
 from typing import AsyncGenerator, Self, List, Optional
 import httpx
+from pydantic import BaseModel
 
-from ai.ollama_response import OllamaMessage, OllamaChatResponse, OllamaResponse
+from ai.ollama_response import OllamaChatResponse, OllamaResponse
 from ai.base_model import BaseAIModel
 
 
@@ -17,11 +18,13 @@ class OllamaApiClient(BaseAIModel):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> Self:
-        if exc_val:
-            raise exc_val
+        try:
+            if exc_val:
+                raise exc_val
+        finally:
+            self.unload_model_from_memory()
+            print("UNLOADED MODEL FROM MEMORY")
 
-        self.unload_model_from_memory()
-        print("UNLOADED MODEL FROM MEMORY")
         return self
 
     def load_model_into_computers_memory(self) -> None:
@@ -66,6 +69,7 @@ class OllamaApiClient(BaseAIModel):
         self,
         prompt: str,
         context: Optional[List[int]] = None,
+        structure: Optional[type[BaseModel]] = None,
     ) -> AsyncGenerator[OllamaResponse, None]:
         async with httpx.AsyncClient(timeout=60) as http:
             payload = {
@@ -76,6 +80,10 @@ class OllamaApiClient(BaseAIModel):
                     "seed": None,  # Used for deterministic answers
                 },
             }
+
+            if structure:
+                payload["format"] = structure.model_json_schema()
+                payload["stream"] = False
 
             async with http.stream(
                 "POST",
