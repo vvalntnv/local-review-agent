@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import inspect
 import re
 from typing import Any, Callable, Dict, List, Optional, Union, get_type_hints
@@ -40,6 +41,25 @@ class ToolCall(BaseModel):
 
     type: str = Field(default="function", description="Type of tool call")
     function: ToolCallFunction = Field(..., description="Function call details")
+
+
+@dataclass
+class ToolResult:
+    ok: Any | None
+    err: Exception | None
+
+    def is_ok(self) -> bool:
+        return self.ok is not None and self.err is None
+
+    def get_val(self) -> Any:
+        assert self.ok is not None
+
+        return self.ok
+
+    def get_err(self) -> Exception:
+        assert self.err is not None
+
+        return self.err
 
 
 def _python_type_to_json_schema(python_type: type) -> Dict[str, Any]:

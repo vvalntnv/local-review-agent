@@ -1,12 +1,10 @@
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
 from ai.base_model import BaseAIModel
 from ai.message import AgentMessage
-from ai.tool_definitions import Tool
+from ai.tool_definitions import Tool, ToolCall, ToolResult
 from program_state import ProgramState
-
-if TYPE_CHECKING:
-    from tools.todos import ToDoItem
+from tools import TOOLS
+from tools.todos import ToDoItem
 
 
 class BaseAgent(ABC):
@@ -14,7 +12,7 @@ class BaseAgent(ABC):
         self.model = ai_model
         self.tools = [tool.model_dump() for tool in tools]
         self.messages: list[AgentMessage] = []
-        self.todos: list["ToDoItem"] = []
+        self.todos: list[ToDoItem] = []
 
     @abstractmethod
     async def invoke(
@@ -28,3 +26,28 @@ class BaseAgent(ABC):
                 return message
 
         return None
+
+    def _call_tool(self, tool_call: ToolCall) -> ToolResult:
+        tool = TOOLS.get(tool_call.function.name)
+        if not tool:
+            return ToolResult(ok=None, err=Exception("No tool selected"))
+        try:
+            result = tool(**tool_call.function.arguments)
+            return ToolResult(ok=result, err=None)
+        except Exception as e:
+            return ToolResult(ok=None, err=e)
+
+    def _add_todo(self, requirement: str) -> None:
+        self.todos.append(ToDoItem(requirement=requirement, is_complete=False))
+
+    def _complete_todo(self, todo_id: int) -> None:
+        self.todos[todo_id].is_complete = True
+
+    def _get_undone_todos(self) -> list[ToDoItem]:
+        return [todo for todo in self.todos if todo.is_complete == False]
+
+    def _get_done_todos(self) -> list[ToDoItem]:
+        return [todo for todo in self.todos if todo.is_complete == True]
+
+    def _get_all_todos(self) -> list[ToDoItem]:
+        return self.todos

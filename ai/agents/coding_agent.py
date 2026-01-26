@@ -1,8 +1,11 @@
+from typing import Any
 from pydantic import ValidationError
 from ai.agents.base_agent import BaseAgent
 from ai.agents.decisions import AgentDecision
+from ai.base_model import BaseAIModel
 from ai.message import AgentMessage
 from ai.ollama_response import OllamaResponse
+from ai.tool_definitions import Tool, ToolCall
 from program_state import ProgramState
 
 CODING_AGENT_INSTRUCTIONS = """
@@ -37,6 +40,25 @@ When you receive the output of explore_structure:
 
 
 class CodeReviewAgent(BaseAgent):
+    def __init__(self, ai_model: BaseAIModel, tools: list[Tool]) -> None:
+        super().__init__(ai_model, tools)
+        self.messages.extend(
+            [
+                {
+                    "content": CODING_AGENT_INSTRUCTIONS,
+                    "role": "system",
+                    "images": None,
+                    "tool_calls": None,
+                },
+                {
+                    "content": "For creating todos, you use the appropriate tools",
+                    "role": "system",
+                    "images": None,
+                    "tool_calls": None,
+                },
+            ]
+        )
+
     def add_user_message(self, user_message: AgentMessage) -> None: ...
 
     async def invoke(self) -> ProgramState:
@@ -53,6 +75,19 @@ class CodeReviewAgent(BaseAgent):
             return ProgramState.USER_CONTROL
 
         # Step 2 is to create to-do list based on the user's task
+        response = self.model.chat(self.messages, tools=self.tools)  # type: ignore
+        while next := await anext(response):
+            if tool_calls := next.message.tool_calls:
+                tool_call = ToolCall(**tool_calls[0])
+                assert tool_call.function.name == "write_todos"
+
+                tool_res = self._call_tool(tool_call)
+
+                if not tool_res.is_ok():
+                    # Try again
+                    return ProgramState.AGENT_CONTROL
+
+                self.todos = tool_res.get_val()
 
         while True:
             ...
