@@ -20,6 +20,9 @@ class BaseAgent(ABC):
     ) -> ProgramState:
         pass
 
+    def add_user_message(self, user_message: AgentMessage) -> None:
+        self.messages.append(user_message)
+
     def _get_user_last_message(self):
         for message in reversed(self.messages):
             if message["role"] == "user":

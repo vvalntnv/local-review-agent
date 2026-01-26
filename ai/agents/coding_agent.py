@@ -60,8 +60,6 @@ class CodeReviewAgent(BaseAgent, SupportsToDoMixin):
             ]
         )
 
-    def add_user_message(self, user_message: AgentMessage) -> None: ...
-
     async def invoke(self) -> ProgramState:
         # This model will work in a couple of steps
         # Step 1 is to reason weather the prompt that is passed to the user is relevant
