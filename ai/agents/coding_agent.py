@@ -7,6 +7,7 @@ from ai.message import AgentMessage
 from ai.ollama_response import OllamaResponse
 from ai.tool_definitions import Tool, ToolCall
 from program_state import ProgramState
+from tools.todos import SupportsToDoMixin
 
 CODING_AGENT_INSTRUCTIONS = """
 You are a Python code reviewer. Your job is to inspect a repository and report bad practices, bugs, and refactors, and suggest cleaner implementations.
@@ -39,7 +40,7 @@ When you receive the output of explore_structure:
 """
 
 
-class CodeReviewAgent(BaseAgent):
+class CodeReviewAgent(BaseAgent, SupportsToDoMixin):
     def __init__(self, ai_model: BaseAIModel, tools: list[Tool]) -> None:
         super().__init__(ai_model, tools)
         self.messages.extend(
