@@ -1,7 +1,7 @@
 from typing import Literal, Optional, TypedDict
 
 
-class Message(TypedDict):
+class AgentMessage(TypedDict):
     role: Literal["system", "user", "assistant", "tool"]
     content: str
     images: Optional[list[str]]

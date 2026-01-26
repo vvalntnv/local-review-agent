@@ -4,7 +4,7 @@ from typing import Callable
 from pydantic import BaseModel
 from ai.agents.base_agent import BaseAgent
 from ai.base_model import BaseAIModel
-from ai.message import Message
+from ai.message import AgentMessage
 from ai.tool_definitions import Tool, ToolCall
 from tools import TOOLS
 
@@ -38,17 +38,18 @@ When you receive the output of explore_structure:
 - Do not ask the user what to do with it.
 """
 
-_ = """When you receive the output of explore_structure:
-- Treat it as the project file tree.
-- Immediately analyze the structure for:
-  - suspicious files
-  - bad practices
-  - missing standard files
-  - poor naming
-  - likely tech stack
-- Then decide which files to read next.
-- Do not ask the user what to do with it.
-"""
+
+class ToolRetryTracker:
+    def __init__(self, max_retries: int = 3):
+        self.attempts: dict[str, int] = {}
+        self.max_retries = max_retries
+
+    def should_retry(self, tool_name: str) -> bool:
+        count = self.attempts.get(tool_name, 0)
+        return count < self.max_retries
+
+    def record_attempt(self, tool_name: str):
+        self.attempts[tool_name] = self.attempts.get(tool_name, 0) + 1
 
 
 class CodeReviewAgent(BaseAgent):
@@ -61,8 +62,11 @@ class CodeReviewAgent(BaseAgent):
         self.model = model
         self.instructions = instructions
         self.tools = [tool.model_dump() for tool in tools]
+        self.retry_tracker = ToolRetryTracker()
 
-    async def invoke(self, messages: list[Message]):
+    async def invoke(
+        self, messages: list[AgentMessage]
+    ) -> tuple[list[AgentMessage], bool]:
         # I know its dirty, its just a prototype
         should_give_back_control = True
 
@@ -96,11 +100,16 @@ class CodeReviewAgent(BaseAgent):
             content = chunk.message.content
 
             if content:
-                print(content, sep="", end="")
+                print(content, end="", flush=True)
                 current_content += content
 
             if chunk.message.tool_calls:
                 tools.extend([ToolCall(**tool) for tool in chunk.message.tool_calls])
+
+        print()  # Newline after streaming completes
+
+        if tools:
+            print(f"\n🔧 Calling {len(tools)} tool(s)...")
 
         if tools:
             should_give_back_control = False
@@ -108,13 +117,14 @@ class CodeReviewAgent(BaseAgent):
             message_predicate = (
                 "The tool failed... I should try and call the tool again, "
                 "this time with keeping the error in mind. "
+                "I should invoke the tool again. \n"
                 "Maybe the error will tell me if I have something wrong "
                 "in the parameters passed: "
                 if not is_success
                 else ""
             )
 
-            tool_result: Message = {
+            tool_result: AgentMessage = {
                 "role": "tool",
                 "content": result,
                 "images": None,
@@ -123,7 +133,14 @@ class CodeReviewAgent(BaseAgent):
             messages.append(tool_result)
 
             if not is_success:
-                model_message: Message = {
+                # Record attempt for retry tracking
+                self.retry_tracker.record_attempt("tool_execution")
+
+                # Check if we should give up and return control to user
+                if not self.retry_tracker.should_retry("tool_execution"):
+                    return messages, True  # Give control back to user
+
+                model_message: AgentMessage = {
                     "role": "assistant",
                     "content": message_predicate + result,
                     "images": None,
@@ -134,22 +151,31 @@ class CodeReviewAgent(BaseAgent):
         return messages, should_give_back_control
 
     async def call_tool(self, tools_to_call: list[ToolCall]) -> tuple[str, bool]:
+        results = []
+
         for tool in tools_to_call:
-            print("calling tool: " + tool.function.name)
+            print(f"calling tool: {tool.function.name}")
             tool_function = TOOLS.get(tool.function.name)
 
             if not tool_function:
-                message = "The tool does not exist!"
-                return (message, False)
+                results.append(f"ERROR: Tool '{tool.function.name}' does not exist!")
+                continue
 
             result, is_success = self.try_to_call_tool(
                 tool_function,
                 tool.function.arguments,
             )
 
-            return result, is_success
+            status = "✓" if is_success else "✗"
+            results.append(f"{status} {tool.function.name}: {result}")
 
-        return ("Nothing executed", False)
+            if not is_success:
+                return ("\n".join(results), False)
+
+        if not results:
+            return ("No tools executed", False)
+
+        return ("\n".join(results), True)
 
     def try_to_call_tool(self, function: Callable, kwargs: dict) -> tuple[str, bool]:
         try:

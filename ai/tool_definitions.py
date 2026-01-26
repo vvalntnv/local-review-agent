@@ -76,8 +76,10 @@ def _python_type_to_json_schema(python_type: type) -> Dict[str, Any]:
         # Handle Pydantic models
         return python_type.model_json_schema()
 
-    # Default to string for unknown types
-    return {"type": "string"}
+    raise TypeError(
+        f"Unsupported parameter type: {python_type}. "
+        f"Supported types: str, int, float, bool, List[T], Optional[T], BaseModel"
+    )
 
 
 def _extract_function_description(func: Callable) -> str:
@@ -167,8 +169,8 @@ def _create_tool_schema(func: Callable) -> Dict[str, Any]:
         )
 
 
-# THIS IS AI GENERATED SLOP!!!
-# I was too lazy building this ;(
+# Tool schema generation using reflection
+# Automatically converts Python type hints to JSON Schema for Ollama API
 def generate_ollama_tools() -> List[Tool]:
     """
     Dynamically generates Ollama API tool definitions from tools/ directory

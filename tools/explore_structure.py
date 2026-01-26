@@ -3,6 +3,20 @@ import re
 from tools.schemas import Directory, File
 
 
+def validate_safe_path(path: str, allowed_root: str = ".") -> str:
+    """Ensure path is within allowed directory"""
+    abs_path = os.path.abspath(path)
+    abs_root = os.path.abspath(allowed_root)
+
+    if not abs_path.startswith(abs_root):
+        raise ValueError(f"Path {path} is outside allowed directory")
+
+    if not os.path.isdir(abs_path):
+        raise NotADirectoryError(f"Path is not a directory: {path}")
+
+    return abs_path
+
+
 def explore_structure(
     root_dir_path: str,
     depth: int = 1,
@@ -11,8 +25,7 @@ def explore_structure(
     if depth is None:
         depth = 1
 
-    if not os.path.isdir(root_dir_path):
-        raise Exception(f"Path is not a directory: {root_dir_path}")
+    root_dir_path = validate_safe_path(root_dir_path)
 
     # Initialize ignore patterns
     ignore_patterns = []

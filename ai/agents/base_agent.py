@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from ai.message import Message
+from ai.message import AgentMessage
 
 
 class BaseAgent(ABC):
@@ -7,5 +7,7 @@ class BaseAgent(ABC):
         pass
 
     @abstractmethod
-    async def invoke(self, messages: list[Message]) -> tuple[list[Message], bool]:
+    async def invoke(
+        self, messages: list[AgentMessage]
+    ) -> tuple[list[AgentMessage], bool]:
         pass

@@ -26,9 +26,9 @@ class UserMessage(BaseModel):
     images: Optional[List[str]] = None
 
 
-class Message(UserMessage):
+class OllamaMessage(UserMessage):
     tool_calls: Optional[List[dict]] = None
 
 
 class OllamaChatResponse(BaseOllamaResponse):
-    message: Message
+    message: OllamaMessage

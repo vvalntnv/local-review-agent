@@ -2,7 +2,7 @@ import json
 from typing import AsyncGenerator, Self, List, Optional
 import httpx
 
-from ai.ollama_response import Message, OllamaChatResponse, OllamaResponse
+from ai.ollama_response import OllamaMessage, OllamaChatResponse, OllamaResponse
 from ai.base_model import BaseAIModel
 
 
@@ -44,7 +44,7 @@ class OllamaApiClient(BaseAIModel):
         messages: list[dict],
         tools: Optional[list[dict]] = None,
     ) -> AsyncGenerator[OllamaChatResponse, None]:
-        async with httpx.AsyncClient() as http:
+        async with httpx.AsyncClient(timeout=60) as http:
             payload = {"model": self.model, "temperature": 0.1, "messages": messages}
 
             if tools:
