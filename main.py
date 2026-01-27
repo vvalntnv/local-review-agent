@@ -1,7 +1,9 @@
 import asyncio
 import json
 import logging
-from ai.agents.code_review import CodeReviewAgent
+
+from sqlalchemy.orm import Session
+from ai.agents.coding_agent import CodeReviewAgent
 
 from ai.message import AgentMessage
 from ai.tool_definitions import generate_ollama_tools
@@ -9,6 +11,7 @@ from db.database import DatabaseManager
 
 from db.models import Chat
 from ai.communication import OllamaApiClient
+from program_state import ProgramState
 
 log = logging.getLogger("main")
 log.setLevel(logging.DEBUG)
@@ -19,14 +22,19 @@ async def main() -> None:
     db_manager.init_models()
 
     def get_or_create_chat(session, name: str = "default") -> Chat:
-        chat = session.query(Chat).filter_by(name=name).first()
+        # chat = session.query(Chat).filter_by(name=name).first()
+        chat = None
         if not chat:
             chat = Chat(name=name, messages=[])
             session.add(chat)
             session.commit()
         return chat
 
-    def save_messages(session, chat_id: int, messages: list[AgentMessage]) -> None:
+    def save_messages(
+        session: Session,
+        chat_id: int,
+        messages: list[AgentMessage],
+    ) -> None:
         chat = session.get(Chat, chat_id)
         if chat:
             chat.messages = messages
@@ -43,42 +51,31 @@ async def main() -> None:
         tools = generate_ollama_tools()
         review_agent = CodeReviewAgent(
             client,
-            "You are a pro at doing review",
             tools=tools,
         )
-        total_loops = 0
-        ask_user = False
+        state = ProgramState.USER_CONTROL
         while True:
-            user_request = input("\nWhat should the agent review?: ")
-            messages.append(
-                {
-                    "role": "user",
-                    "content": user_request,
-                    "images": None,
-                    "tool_calls": None,
-                }
-            )
+            if state == ProgramState.USER_CONTROL:
+                user_request = input("\nWhat should the agent review?: ")
+                review_agent.add_user_message(
+                    {
+                        "role": "user",
+                        "content": user_request,
+                        "images": None,
+                        "tool_calls": None,
+                    }
+                )
 
-            if user_request == "exit":
-                return
+                if user_request == "exit":
+                    return
 
-            ask_user = False
+            state = await review_agent.invoke()
 
-            while not ask_user:
-                MAX_ITERATIONS = 10
+            log.debug(messages)
 
-                if total_loops > MAX_ITERATIONS:
-                    raise Exception(
-                        f"Agent exceeded maximum iterations ({MAX_ITERATIONS}). "
-                        f"Last {len(messages)} messages:\n"
-                        f"{json.dumps(messages[-3:], indent=2)}"
-                    )
-                messages, ask_user = await review_agent.invoke(messages)
-                log.debug(messages)
-
-                # Save conversation after each agent interaction
-                with db_manager.get_session() as session:
-                    save_messages(session, chat.id, messages)
+            # Save conversation after each agent interaction
+            # with db_manager.get_session() as session:
+            #     save_messages(session, chat.id, messages)
 
 
 if __name__ == "__main__":

@@ -62,6 +62,11 @@ class ToolResult:
         return self.err
 
 
+# THE CODE BELOW IS AI GARBAGE!!!!
+# ||||||||||||||||||||||||||||||||
+# VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
+
+
 def _python_type_to_json_schema(python_type: type) -> Dict[str, Any]:
     """Convert Python type to JSON schema definition"""
     if python_type is str:
@@ -129,6 +134,12 @@ def _generate_tool_examples(func: Callable) -> str:
         return 'read_file(file_path="src/main.py")'
     elif func_name == "write_review":
         return 'write_review(review="Excellent code structure", file_to_write="review.txt")'
+    elif func_name == "write_todos":
+        return 'write_todos(requirements=["Implement feature X", "Write unit tests", "Update documentation"])'
+    elif func_name == "update_todo":
+        return "update_todo(todo_id=0, new_status=True)"
+    elif func_name == "remove_todo":
+        return "remove_todo(todo_id=2)"
 
     return f"{func_name}(...)"
 
@@ -169,6 +180,18 @@ def _create_tool_schema(func: Callable) -> Dict[str, Any]:
             elif param_name == "file_to_write":
                 param_schema["description"] = (
                     "The file path where the review should be written"
+                )
+            elif param_name == "requirements":
+                param_schema["description"] = (
+                    "List of requirement strings to add as todo items"
+                )
+            elif param_name == "todo_id":
+                param_schema["description"] = (
+                    "The index of the todo item in the list (0-based)"
+                )
+            elif param_name == "new_status":
+                param_schema["description"] = (
+                    "The new completion status (True for complete, False for incomplete)"
                 )
             else:
                 param_schema["description"] = f"Parameter {param_name}"

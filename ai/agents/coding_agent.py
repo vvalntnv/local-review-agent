@@ -57,6 +57,12 @@ class CodeReviewAgent(BaseAgent, SupportsToDoMixin):
                     "images": None,
                     "tool_calls": None,
                 },
+                {
+                    "content": "You should always create todos first. So call the todo tool and create some todos before you ever thing about proceeding with the task, no matter what the user demands",
+                    "role": "system",
+                    "images": None,
+                    "tool_calls": None,
+                },
             ]
         )
 
@@ -65,12 +71,13 @@ class CodeReviewAgent(BaseAgent, SupportsToDoMixin):
         # Step 1 is to reason weather the prompt that is passed to the user is relevant
         # Agent's internal Loop
 
+        breakpoint()
         user_message = self._get_user_last_message()
 
         if not user_message:
             return ProgramState.USER_CONTROL
 
-        if not self.is_propmt_relevant(self.messages[-1]["content"]):
+        if not await self.is_propmt_relevant(self.messages[-1]["content"]):
             return ProgramState.USER_CONTROL
 
         # Step 2 is to create to-do list based on the user's task
@@ -78,7 +85,16 @@ class CodeReviewAgent(BaseAgent, SupportsToDoMixin):
         while next := await anext(response):
             if tool_calls := next.message.tool_calls:
                 tool_call = ToolCall(**tool_calls[0])
-                assert tool_call.function.name == "write_todos"
+                if tool_call.function.name != "write_todos":
+                    self.messages.append(
+                        {
+                            "role": "assistant",
+                            "content": "it seems that I have to first think of creating todos and then fulfill the user's request",
+                            "images": None,
+                            "tool_calls": tool_calls,
+                        }
+                    )
+                    return ProgramState.AGENT_CONTROL
 
                 tool_res = self._call_tool(tool_call)
 
@@ -86,8 +102,12 @@ class CodeReviewAgent(BaseAgent, SupportsToDoMixin):
                     # Try again
                     return ProgramState.AGENT_CONTROL
 
-                self.todos = tool_res.get_val()
+                # Do not assign; write_todos mutates self.todos in place
+            else:
+                print(next.message.content, sep="", end="")
 
+        print(self.todos)
+        return ProgramState.USER_CONTROL
         while True:
             ...
 
