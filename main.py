@@ -53,7 +53,16 @@ async def main() -> None:
             client,
             tools=tools,
         )
-        state = ProgramState.USER_CONTROL
+        state = ProgramState.AGENT_CONTROL
+        user_request = "Can you review the current project?"
+        review_agent.add_user_message(
+            {
+                "role": "user",
+                "content": user_request,
+                "images": None,
+                "tool_calls": None,
+            }
+        )
         while True:
             if state == ProgramState.USER_CONTROL:
                 user_request = input("\nWhat should the agent review?: ")

@@ -3,7 +3,6 @@ from pydantic import ValidationError
 from ai.agents.base_agent import BaseAgent
 from ai.agents.decisions import AgentDecision
 from ai.base_model import BaseAIModel
-from ai.message import AgentMessage
 from ai.ollama_response import OllamaResponse
 from ai.tool_definitions import Tool, ToolCall
 from program_state import ProgramState
@@ -40,7 +39,7 @@ When you receive the output of explore_structure:
 """
 
 
-class CodeReviewAgent(BaseAgent, SupportsToDoMixin):
+class CodeReviewAgent(SupportsToDoMixin, BaseAgent):
     def __init__(self, ai_model: BaseAIModel, tools: list[Tool]) -> None:
         super().__init__(ai_model, tools)
         self.todos_created = False
@@ -68,28 +67,24 @@ class CodeReviewAgent(BaseAgent, SupportsToDoMixin):
         )
 
     async def invoke(self) -> ProgramState:
-        # This model will work in a couple of steps
-        # Step 1 is to reason weather the prompt that is passed to the user is relevant
-        # Agent's internal Loop
-
         user_message = self._get_user_last_message()
 
         if not user_message:
             return ProgramState.USER_CONTROL
 
-        if not await self.is_propmt_relevant(self.messages[-1]["content"]):
-            return ProgramState.USER_CONTROL
-
         # Step 2 is to create to-do list based on the user's task
         # If todos haven't been created yet, enforce todo creation first
         if not self.todos_created:
+            if not await self.is_propmt_relevant(user_message["content"]):
+                return ProgramState.USER_CONTROL
+
             response = self.model.chat(self.messages, tools=self.tools)  # type: ignore
             async for next_item in response:
                 if tool_calls := next_item.message.tool_calls:
-                    breakpoint()
                     tool_call = ToolCall(**tool_calls[0])
 
                     if tool_call.function.name != "write_todos":
+                        print("|nee ok|")
                         # Reject and remind
                         self.messages.append(
                             {
@@ -128,12 +123,68 @@ class CodeReviewAgent(BaseAgent, SupportsToDoMixin):
                 else:
                     print(next_item.message.content, end="")
 
-            print(self.todos)
             return ProgramState.USER_CONTROL
 
-        # Continue with normal execution after todos are created
-        # ... rest of your logic here
-        # For now, we'll just return USER_CONTROL to indicate the agent is done with this step
+        # --- Main Execution Loop ---
+
+        # 1. Check for completion
+        if not self._get_undone_todos():
+            print("\nAll tasks in the todo list are complete.")
+            return ProgramState.USER_CONTROL
+
+        # 2. Generate Model Response
+        print("\nThinking...")
+        # Convert AgentMessage (TypedDict) to regular dict format for the model
+        response = self.model.chat(self.messages, tools=self.tools)  # type: ignore
+
+        content_buffer = ""
+        tool_calls = []
+
+        async for chunk in response:
+            if chunk.message.content:
+                print(chunk.message.content, end="", flush=True)
+                content_buffer += chunk.message.content
+            if chunk.message.tool_calls:
+                tool_calls.extend(chunk.message.tool_calls)
+
+        print()  # Newline for clean output
+
+        # 3. Add Assistant Message to History
+        self.messages.append(
+            {
+                "role": "assistant",
+                "content": content_buffer,
+                "images": None,
+                "tool_calls": tool_calls if tool_calls else None,
+            }
+        )
+
+        # 4. Execute Tools
+        if tool_calls:
+            for tc_data in tool_calls:
+                tool_call = ToolCall(**tc_data)
+
+                # Execute tool
+                result = self._call_tool(tool_call)
+
+                # Add Tool Output to History
+                self.messages.append(
+                    {
+                        "role": "tool",
+                        "content": (
+                            str(result.get_val())
+                            if result.is_ok()
+                            else f"Error: {result.get_err()}"
+                        ),
+                        "images": None,
+                        "tool_calls": None,
+                    }
+                )
+
+            # Continue autonomous execution
+            return ProgramState.AGENT_CONTROL
+
+        # 5. Hand back to user if no tools were called (e.g. asking a question)
         return ProgramState.USER_CONTROL
 
     async def is_propmt_relevant(self, prompt: str) -> bool:

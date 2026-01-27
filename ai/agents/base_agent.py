@@ -40,17 +40,11 @@ class BaseAgent(ABC):
         except Exception as e:
             return ToolResult(ok=None, err=e)
 
-    def _add_todo(self, requirement: str) -> None:
-        self.todos.append(ToDoItem(requirement=requirement, is_complete=False))
-
-    def _complete_todo(self, todo_id: int) -> None:
-        self.todos[todo_id].is_complete = True
-
     def _get_undone_todos(self) -> list[ToDoItem]:
-        return [todo for todo in self.todos if todo.is_complete == False]
+        return [todo for todo in self.todos if not todo.is_complete]
 
     def _get_done_todos(self) -> list[ToDoItem]:
-        return [todo for todo in self.todos if todo.is_complete == True]
+        return [todo for todo in self.todos if not todo.is_complete]
 
     def _get_all_todos(self) -> list[ToDoItem]:
         return self.todos

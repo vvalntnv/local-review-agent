@@ -1,7 +1,10 @@
 from pydantic import BaseModel
 
-from ai.tool_definitions import ToolCall, ToolResult
-from typing import List
+from ai.tool_definitions import Tool, ToolCall, ToolResult
+from typing import TYPE_CHECKING, List
+
+if TYPE_CHECKING:
+    from ai.base_model import BaseAIModel
 
 
 class ToDoItem(BaseModel):
@@ -9,8 +12,10 @@ class ToDoItem(BaseModel):
     is_complete: bool
 
 
+# This is Viki Slop (sry, i really want to get this done)
 class SupportsToDoMixin:
-    def __init__(self) -> None:
+    def __init__(self, ai_model: "BaseAIModel", tools: list[Tool]) -> None:
+        super().__init__(ai_model=ai_model, tools=tools)  # type: ignore
         assert hasattr(self, "todos")
         todos = getattr(self, "todos")
         assert isinstance(todos, list)
