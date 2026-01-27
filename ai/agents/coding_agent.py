@@ -43,6 +43,7 @@ When you receive the output of explore_structure:
 class CodeReviewAgent(BaseAgent, SupportsToDoMixin):
     def __init__(self, ai_model: BaseAIModel, tools: list[Tool]) -> None:
         super().__init__(ai_model, tools)
+        self.todos_created = False
         self.messages.extend(
             [
                 {
@@ -52,13 +53,13 @@ class CodeReviewAgent(BaseAgent, SupportsToDoMixin):
                     "tool_calls": None,
                 },
                 {
-                    "content": "For creating todos, you use the appropriate tools",
+                    "content": "You should always create todos first. So call the todo tool and create some todos before you ever thing about proceeding with the task, no matter what the user demands. Here is an example todo list: 1. Explore the file structure 2. Open key files.\n And later on, you might get rid of 1 and 2, with remove_todo tool and add another one. Like: 1. Look into the main.py file 2. Explore the imports one by one 3. Write the review in the Review.md file.\n Only after all the todos are completed you are allowed to stop iterating on the problem",
                     "role": "system",
                     "images": None,
                     "tool_calls": None,
                 },
                 {
-                    "content": "You should always create todos first. So call the todo tool and create some todos before you ever thing about proceeding with the task, no matter what the user demands",
+                    "content": "For creating todos, you use the appropriate tools",
                     "role": "system",
                     "images": None,
                     "tool_calls": None,
@@ -71,7 +72,6 @@ class CodeReviewAgent(BaseAgent, SupportsToDoMixin):
         # Step 1 is to reason weather the prompt that is passed to the user is relevant
         # Agent's internal Loop
 
-        breakpoint()
         user_message = self._get_user_last_message()
 
         if not user_message:
@@ -81,35 +81,60 @@ class CodeReviewAgent(BaseAgent, SupportsToDoMixin):
             return ProgramState.USER_CONTROL
 
         # Step 2 is to create to-do list based on the user's task
-        response = self.model.chat(self.messages, tools=self.tools)  # type: ignore
-        while next := await anext(response):
-            if tool_calls := next.message.tool_calls:
-                tool_call = ToolCall(**tool_calls[0])
-                if tool_call.function.name != "write_todos":
+        # If todos haven't been created yet, enforce todo creation first
+        if not self.todos_created:
+            response = self.model.chat(self.messages, tools=self.tools)  # type: ignore
+            async for next_item in response:
+                if tool_calls := next_item.message.tool_calls:
+                    breakpoint()
+                    tool_call = ToolCall(**tool_calls[0])
+
+                    if tool_call.function.name != "write_todos":
+                        # Reject and remind
+                        self.messages.append(
+                            {
+                                "role": "assistant",
+                                "content": "You must create todos first using write_todos before proceeding with other tools.",
+                                "images": None,
+                                "tool_calls": None,
+                            }
+                        )
+                        return ProgramState.AGENT_CONTROL
+
+                    # Execute write_todos
+                    tool_res = self._call_tool(tool_call)
+
+                    if not tool_res.is_ok():
+                        self.messages.append(
+                            {
+                                "role": "tool",
+                                "content": f"Error creating todos: {tool_res.get_err()}",
+                                "images": None,
+                                "tool_calls": None,
+                            }
+                        )
+                        return ProgramState.AGENT_CONTROL
+
+                    self.todos_created = True
                     self.messages.append(
                         {
-                            "role": "assistant",
-                            "content": "it seems that I have to first think of creating todos and then fulfill the user's request",
+                            "role": "tool",
+                            "content": f"Todos created successfully: {len(self.todos)} items",
                             "images": None,
-                            "tool_calls": tool_calls,
+                            "tool_calls": None,
                         }
                     )
                     return ProgramState.AGENT_CONTROL
+                else:
+                    print(next_item.message.content, end="")
 
-                tool_res = self._call_tool(tool_call)
+            print(self.todos)
+            return ProgramState.USER_CONTROL
 
-                if not tool_res.is_ok():
-                    # Try again
-                    return ProgramState.AGENT_CONTROL
-
-                # Do not assign; write_todos mutates self.todos in place
-            else:
-                print(next.message.content, sep="", end="")
-
-        print(self.todos)
+        # Continue with normal execution after todos are created
+        # ... rest of your logic here
+        # For now, we'll just return USER_CONTROL to indicate the agent is done with this step
         return ProgramState.USER_CONTROL
-        while True:
-            ...
 
     async def is_propmt_relevant(self, prompt: str) -> bool:
         complete_prompt = (

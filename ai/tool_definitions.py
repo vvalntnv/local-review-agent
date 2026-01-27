@@ -49,7 +49,7 @@ class ToolResult:
     err: Exception | None
 
     def is_ok(self) -> bool:
-        return self.ok is not None and self.err is None
+        return self.err is None
 
     def get_val(self) -> Any:
         assert self.ok is not None
