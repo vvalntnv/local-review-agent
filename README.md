@@ -7,3 +7,9 @@ The prototype is just a way for me to learn how to build agents from scratch, us
 
 ## FUTURE
 no future for this project, **THIS IS A PROTOTYPE**. Do not expect the cleanest code, nor the best practices applied here
+
+## Leasons learned
+AI is dumb. Especially Local AI. The program has to do a lot of work to chunk somewhat ambiguous user requst in order 
+for the AI to understand it. In a next project, I would probably go with a Planner agent (one that plans the tasks for the review agent) and then a review agent, that will follow the planned tasks by the planner agent and execute the tasks. Or something along those lines
+
+The code you are seeing in this repo is nowhere near perfect but its a start. The journey without LangChain or other types of libraries for doing AI agents is ON!
